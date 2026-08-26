@@ -39,6 +39,20 @@
   #zn-error.show { display: flex; }
   #zn-error b { font-size: 15px; }
   #zn-error span { font-size: 13px; opacity: .6; max-width: 420px; line-height: 1.5; }
+
+  /* Botao proprio "Voltar ao 360" (injetado via JS).
+     Mesmo estilo dos botoes Espaco/Tecnologia da Denza:
+     fundo branco, texto navy, borda sutil e cantos suaves. */
+  #zn-back {
+    position: fixed; top: 16px; left: 16px; z-index: 99998;
+    display: none; align-items: center; gap: 6px;
+    padding: 10px 16px; border: 1px solid rgba(2,19,73,.22); border-radius: 8px;
+    background: #fff; color: #021349;
+    font: 500 14px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.10);
+  }
+  #zn-back.show { display: inline-flex; }
+
   @media (prefers-color-scheme: dark) {
     /* o app 3D tem fundo claro proprio; mantemos o loader coerente com ele */
     html, body { background: #fff; }
@@ -48,6 +62,8 @@
 <body>
 
 <div class="zn--wrapper"></div>
+
+<button id="zn-back" type="button">&#8592; Voltar ao 360</button>
 
 <div id="zn-loader">
   <div class="zl-label">Denza Z9GT</div>
@@ -184,34 +200,37 @@ try {
   fail(err);
 }
 </script>
-  <script>
+
+<!-- Botao "Voltar ao 360": aparece ao clicar em Espaco/Tecnologia e
+     retorna a vista exterior (o giro 360 padrao). -->
+<script>
 (function () {
-  var HIDE = ['Espaço', 'Tecnologia'];
-  function tidy() {
-    document.querySelectorAll('.zn--wrapper *').forEach(function (el) {
-      if (el.children.length === 0) {
-        var t = (el.textContent || '').trim();
-        if (HIDE.indexOf(t) !== -1) {
-          var btn = el.closest('button,a,[class*="btn"],[class*="tab"]') || el;
-          btn.style.setProperty('display', 'none', 'important');
-        }
+  var TRIGGERS = ['Espaço', 'Tecnologia'];
+  var back = document.getElementById('zn-back');
+
+  function showBack() { if (back) back.classList.add('show'); }
+  function hideBack() { if (back) back.classList.remove('show'); }
+
+  if (back) {
+    back.addEventListener('click', function () {
+      if (window.znDenza && typeof window.znDenza.lookSwitch === 'function') {
+        window.znDenza.lookSwitch('outer');
       }
+      hideBack();
     });
   }
-  var waited = 0;
-  var wait = setInterval(function () {
-    var w = document.querySelector('.zn--wrapper');
-    if (w) {
-      clearInterval(wait);
-      tidy();
-      if ('MutationObserver' in window) {
-        new MutationObserver(tidy).observe(w, { childList: true, subtree: true });
-      }
-    } else if ((waited += 200) > 15000) {
-      clearInterval(wait);
-    }
-  }, 200);
+
+  // Detecta clique nos botoes Espaco/Tecnologia (event delegation na fase de
+  // captura, para resistir a re-render do app Vue da Denza).
+  document.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest &&
+             e.target.closest('button,a,[class*="btn"],[class*="tab"]');
+    if (!el) return;
+    var t = (el.textContent || '').trim();
+    if (TRIGGERS.indexOf(t) !== -1) showBack();
+  }, true);
 })();
 </script>
+
 </body>
 </html>
