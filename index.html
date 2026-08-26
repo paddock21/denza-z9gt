@@ -45,6 +45,35 @@
   }
 </style>
 </head>
+  <script>
+(function () {
+  var HIDE = ['Espaço', 'Tecnologia'];
+  function tidy() {
+    document.querySelectorAll('.zn--wrapper *').forEach(function (el) {
+      if (el.children.length === 0) {
+        var t = (el.textContent || '').trim();
+        if (HIDE.indexOf(t) !== -1) {
+          var btn = el.closest('button,a,[class*="btn"],[class*="tab"]') || el;
+          btn.style.setProperty('display', 'none', 'important');
+        }
+      }
+    });
+  }
+  var waited = 0;
+  var wait = setInterval(function () {
+    var w = document.querySelector('.zn--wrapper');
+    if (w) {
+      clearInterval(wait);
+      tidy();
+      if ('MutationObserver' in window) {
+        new MutationObserver(tidy).observe(w, { childList: true, subtree: true });
+      }
+    } else if ((waited += 200) > 15000) {
+      clearInterval(wait);
+    }
+  }, 200);
+})();
+</script>
 <body>
 
 <div class="zn--wrapper"></div>
