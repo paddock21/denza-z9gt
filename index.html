@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Denza Z9GT — Configurador 3D</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    overflow: hidden; background: #fff;
+    -webkit-font-smoothing: antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  /* Container exigido pelo runtime 3D da Denza: init() faz
+     document.querySelector('.zn--wrapper') e monta o app Vue nele. */
+  .zn--wrapper { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* Botao "Back to Gallery" do build original nao faz sentido dentro do embed.
+     Some por padrao; use ?ui=full para exibir. */
+  body:not(.ui-full) .page-config.options-group-1 { display: none !important; }
+
+  #zn-loader {
+    position: fixed; inset: 0; z-index: 99999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 18px; background: #fff; color: #021349;
+    transition: opacity .45s ease; 
+  }
+  #zn-loader.hidden { opacity: 0; pointer-events: none; }
+  #zn-loader .zl-label { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; opacity: .55; }
+  #zn-loader .zl-track { width: min(240px, 55vw); height: 2px; background: rgba(2,19,73,.12); overflow: hidden; border-radius: 2px; }
+  #zn-loader .zl-bar { height: 100%; width: 0%; background: #021349; transition: width .25s ease; }
+  #zn-loader .zl-pct { font-size: 12px; font-variant-numeric: tabular-nums; opacity: .5; }
+  #zn-error {
+    position: fixed; inset: 0; z-index: 100000; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 24px; text-align: center; background: #fff; color: #021349;
+  }
+  #zn-error.show { display: flex; }
+  #zn-error b { font-size: 15px; }
+  #zn-error span { font-size: 13px; opacity: .6; max-width: 420px; line-height: 1.5; }
+  @media (prefers-color-scheme: dark) {
+    /* o app 3D tem fundo claro proprio; mantemos o loader coerente com ele */
+    html, body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<div class="zn--wrapper"></div>
+
+<div id="zn-loader">
+  <div class="zl-label">Denza Z9GT</div>
+  <div class="zl-track"><div class="zl-bar" id="zn-bar"></div></div>
+  <div class="zl-pct" id="zn-pct">0%</div>
+</div>
+
+<div id="zn-error">
+  <b>Nao foi possivel carregar o modelo 3D.</b>
+  <span id="zn-error-msg">Verifique a conexao. O visualizador depende dos arquivos hospedados em www.denza.com.</span>
+</div>
+
+<script type="module">
+/* ------------------------------------------------------------------
+   Denza Z9GT — visualizador 3D isolado para embed via <iframe>.
+
+   O canvas three.js da pagina original nao e HTML estatico: ele e
+   criado por um modulo ES publico da propria Denza,
+     /material/__CN/denza-overseas/public/vrsource/am-z9gt-config/model.js
+   que exporta init({ path, lang, onProgress, onZoom, onBack }) e monta
+   toda a UI (cores, rodas, interior, cenas) dentro de .zn--wrapper.
+   Este arquivo apenas hospeda esse runtime em uma pagina limpa.
+------------------------------------------------------------------ */
+
+const BASE = 'https://www.denza.com/material/__CN/denza-overseas/public/vrsource/am-z9gt-config';
+
+const q = new URLSearchParams(location.search);
+
+// Idiomas realmente publicados neste build: pt, es, en
+const LANGS = ['pt', 'es', 'en'];
+const lang  = LANGS.includes(q.get('lang')) ? q.get('lang') : 'pt';
+
+if (q.get('ui') === 'full') document.body.classList.add('ui-full');
+
+const loaderEl = document.getElementById('zn-loader');
+const barEl    = document.getElementById('zn-bar');
+const pctEl    = document.getElementById('zn-pct');
+
+const post = (msg) => {
+  try { parent.postMessage(Object.assign({ source: 'denza-z9gt-3d' }, msg), '*'); } catch (e) {}
+};
+
+const fail = (err) => {
+  console.error('[denza-z9gt-3d]', err);
+  document.getElementById('zn-error-msg').textContent =
+    'Verifique a conexao. Detalhe: ' + (err && err.message ? err.message : err);
+  document.getElementById('zn-error').classList.add('show');
+  loaderEl.classList.add('hidden');
+  post({ event: 'error', message: String(err && err.message || err) });
+};
+
+// Valores aceitos pela API do modelo (extraidos do build oficial)
+const VALUES = {
+  exteriorColor: ['green', 'cyan', 'blue', 'gold', 'white', 'copper', 's-black', 'o-black'],
+  interiorColor: ['red', 'black', 'white'],
+  wheel:         ['wheel-0', 'wheel-1', 'wheel-2'],
+  sideMirror:    ['ev', 'dm'],
+  version:       ['ev'],
+  lookSwitch:    ['outer', 'inner', 'inner-fr', 'inner-back', 'wheel', 'space', 'scene'],
+};
+
+let instance = null;
+
+const apply = (action, value) => {
+  if (!instance || typeof instance[action] !== 'function') return false;
+  try { instance[action](value); return true; }
+  catch (e) { console.warn('[denza-z9gt-3d]', action, e); return false; }
+};
+
+try {
+  const { init } = await import(/* @vite-ignore */ `${BASE}/model.js`);
+
+  instance = await init({
+    path: {
+      draco:   `${BASE}/draco`,
+      model:   `${BASE}/model`,
+      assets:  `${BASE}/assets`,
+      locales: `${BASE}/locales`,
+      product: `${BASE}/product`,
+    },
+    lang,
+    onProgress: (p) => {
+      const pct = Math.max(0, Math.min(100, Math.round((p || 0) * 100)));
+      barEl.style.width = pct + '%';
+      pctEl.textContent = pct + '%';
+      post({ event: 'progress', value: pct });
+      if (pct >= 100) {
+        loaderEl.classList.add('hidden');
+        setTimeout(() => { loaderEl.style.display = 'none'; }, 500);
+      }
+    },
+    // No site original o "voltar" devolve para a galeria 2D e pausa o render.
+    // Dentro do embed nao existe galeria: retomamos o render para nao travar.
+    onBack: () => { apply('render', 'play'); post({ event: 'back' }); },
+    onZoom: (state) => post({ event: 'zoom', value: state }),
+  });
+
+  if (!instance) throw new Error('init() retornou vazio');
+
+  // ---- configuracao inicial via query string ----------------------
+  // ex.: ?lang=pt&color=blue&wheel=wheel-2&interior=white&view=outer
+  const initial = [
+    ['exteriorColor', q.get('color')],
+    ['wheel',         q.get('wheel')],
+    ['interiorColor', q.get('interior')],
+    ['sideMirror',    q.get('mirror')],
+    ['lookSwitch',    q.get('view')],
+  ];
+  for (const [action, value] of initial) {
+    if (value && (!VALUES[action] || VALUES[action].includes(value))) apply(action, value);
+  }
+
+  // ---- controle pelo site hospedeiro (opcional) -------------------
+  // parent.postMessage({ target:'denza-z9gt-3d', action:'exteriorColor', value:'gold' }, '*')
+  window.addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || d.target !== 'denza-z9gt-3d' || typeof d.action !== 'string') return;
+    apply(d.action, d.value);
+  });
+
+  // Pausa o render quando o iframe sai da viewport do site hospedeiro,
+  // para nao consumir GPU/bateria numa pagina longa.
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(([entry]) => {
+      apply('render', entry.isIntersecting ? 'play' : 'pause');
+    }, { threshold: 0.01 });
+    io.observe(document.querySelector('.zn--wrapper'));
+  }
+
+  window.znDenza = instance;   // acesso manual no console, se precisar
+  post({ event: 'ready', lang, values: VALUES });
+
+} catch (err) {
+  fail(err);
+}
+</script>
+</body>
+</html>
