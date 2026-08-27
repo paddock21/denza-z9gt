@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>DENZA B5 — 360° 3D</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: #fff;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Container exigido pelo viewer: init() faz querySelector('.zn--wrapper').
+     O proprio model.js injeta o CSS que o dimensiona em 100vw x calc(100*var(--vh)). */
+  .zn--wrapper { position: absolute; inset: 0; }
+
+  /* Estado de carregamento proprio (o loader do viewer aparece por cima quando sobe) */
+  #boot {
+    position: absolute; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center; flex-direction: column;
+    gap: 14px; background: #fff; color: #111;
+    font: 500 13px/1.4 "URW Form Expand", -apple-system, "Segoe UI", Roboto, sans-serif;
+    letter-spacing: .04em; text-transform: uppercase;
+    transition: opacity .4s ease; pointer-events: none;
+  }
+  #boot.done { opacity: 0; }
+  #boot .bar { width: 140px; height: 2px; background: rgba(0,0,0,.12); overflow: hidden; }
+  #boot .bar i { display: block; height: 100%; width: 0%; background: #111; transition: width .25s ease; }
+  #boot .err { color: #b00020; text-transform: none; letter-spacing: 0; max-width: 32ch; text-align: center; }
+
+  /* Controles internos do viewer que podem ser escondidos no embed.
+     .page-config.options-group-1 = botao "Back to Gallery"
+     .page-config.zoom            = botao de expandir/recolher */
+  body.no-back .page-config.options-group-1 { display: none !important; }
+  body.no-zoom .page-config.zoom { display: none !important; }
+
+  /* ---- UI opcional embutida (?ui=1) ------------------------------
+     O viewer roda em modo "config": o painel de opcoes dele fica
+     suprimido porque, no site oficial, quem controla e a pagina-mae.
+     Esta barra devolve esse controle para dentro do iframe.        */
+  #ui {
+    position: absolute; z-index: 8; left: 50%; bottom: 18px;
+    transform: translateX(-50%);
+    display: none; align-items: center; gap: 14px;
+    max-width: calc(100% - 24px); padding: 9px 14px;
+    background: rgba(255,255,255,.82);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    border: 1px solid rgba(0,0,0,.06); border-radius: 999px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.12);
+    font: 500 11px/1 "URW Form Expand", -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #18181b; opacity: 0; transition: opacity .4s ease;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  #ui::-webkit-scrollbar { display: none; }
+  body.has-ui #ui { display: flex; }
+  body.has-ui.ready #ui { opacity: 1; }
+
+  #ui .grp { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  #ui .sep { width: 1px; height: 18px; background: rgba(0,0,0,.1); flex: 0 0 auto; }
+
+  #ui .dot {
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(0,0,0,.18); padding: 0;
+    box-shadow: inset 0 -3px 6px rgba(0,0,0,.18);
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  #ui .dot:hover { transform: scale(1.12); }
+  #ui .dot[aria-pressed="true"] { box-shadow: 0 0 0 2px #18181b, inset 0 -3px 6px rgba(0,0,0,.18); }
+
+  #ui .seg { display: flex; background: rgba(0,0,0,.06); border-radius: 999px; padding: 2px; flex: 0 0 auto; }
+  #ui .seg button {
+    font: inherit; letter-spacing: .05em; text-transform: uppercase;
+    padding: 6px 11px; border: 0; border-radius: 999px; background: transparent;
+    color: #52525b; cursor: pointer; white-space: nowrap;
+  }
+  #ui .seg button[aria-pressed="true"] { background: #fff; color: #18181b; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+
+  @media (max-width: 560px) {
+    #ui { gap: 10px; padding: 8px 10px; bottom: 12px; }
+    #ui .seg button { padding: 6px 9px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="zn--wrapper"></div>
+
+<div id="boot">
+  <div class="bar"><i id="bootbar"></i></div>
+  <div id="bootmsg">Carregando 3D...</div>
+</div>
+
+<!-- Barra opcional, ativada com ?ui=1 -->
+<div id="ui" role="toolbar" aria-label="Configuracao do DENZA B5">
+  <div class="grp" id="ui-colors"></div>
+  <div class="sep"></div>
+  <div class="seg" id="ui-view"></div>
+  <div class="sep"></div>
+  <div class="seg" id="ui-wheel"></div>
+</div>
+
+<script type="module">
+/* ------------------------------------------------------------------
+   DENZA B5 - viewer 3D standalone
+
+   O canvas do configurador da Denza e desenhado por um modulo ES
+   autonomo (WebGL/three.js) servido com Access-Control-Allow-Origin: *,
+   entao ele pode ser carregado de qualquer origem:
+
+     .../vrsource/am-b5-config/model.js
+
+   init({ path: {draco, model, assets, locales, product}, lang,
+          onProgress, onZoom, onBack })
+   monta o app dentro de .zn--wrapper e devolve a instancia de controle.
+   ------------------------------------------------------------------ */
+
+const BASE = 'https://www.denza.com/material/__CN/denza-overseas/public/vrsource/am-b5-config';
+
+const q = new URLSearchParams(location.search);
+const opt = (k, d) => (q.get(k) ?? d);
+const flag = (k, d = false) => {
+  const v = q.get(k);
+  if (v === null) return d;
+  return v !== '0' && v !== 'false' && v !== 'no';
+};
+
+// Valores aceitos pelo modelo B5 (extraidos do bundle do viewer)
+const VALID = {
+  version:  ['gs', 'gl'],                              // gs = alto, gl = baixo
+  color:    ['gold', 'green', 'blue', 'black', 'gray'],
+  interior: ['in-green', 'in-blue', 'in-beige'],
+  wheel:    ['wheel-0', 'wheel-1'],                    // 20" / 18"
+  view:     ['outer', 'inner'],
+  lang:     ['pt', 'es', 'en', 'de', 'fr', 'it', 'pl'],
+};
+const pick = (k, d) => (VALID[k].includes(opt(k, '')) ? opt(k, '') : d);
+
+const CONF = {
+  version:  pick('version', 'gs'),
+  color:    pick('color', 'gold'),
+  interior: pick('interior', 'in-green'),
+  wheel:    pick('wheel', 'wheel-0'),
+  view:     pick('view', 'outer'),
+  lang:     pick('lang', 'pt'),
+  towhook:  flag('towhook', false),
+  ambient:  flag('ambient', false),
+};
+
+if (!flag('back', true)) document.body.classList.add('no-back');
+if (!flag('zoom', true)) document.body.classList.add('no-zoom');
+
+// Nomes oficiais das opcoes (locale pt do proprio viewer)
+const LABELS = {
+  color: {
+    gold:  ['Tarim Poplar Gold', '#c7a45c'],
+    green: ['Olive Green',       '#7e8c72'],
+    blue:  ['Sky Blue',          '#6e97ae'],
+    gray:  ['Stone Grey',        '#8c9094'],
+    black: ['Onyx Black',        '#1c1c1e'],
+  },
+  view:  { outer: 'Exterior', inner: 'Interior' },
+  wheel: { 'wheel-0': '20"', 'wheel-1': '18"' },
+};
+
+const boot = document.getElementById('boot');
+const bootbar = document.getElementById('bootbar');
+const bootmsg = document.getElementById('bootmsg');
+
+let model = null;
+
+// Avisa a pagina-mae sobre o ciclo de vida (util no criador de paginas)
+const emit = (type, detail) => {
+  try { parent.postMessage({ source: 'denza-3d', type, ...detail }, '*'); } catch (e) {}
+};
+
+/* Aplica a configuracao na instancia. lookSwitch antes de cor/roda porque
+   esses itens so sao visiveis por fora - e o que o site oficial faz. */
+function apply(c, { switchView = true } = {}) {
+  if (!model) return;
+  if (c.version && model.version) model.version(c.version);
+  if (c.color && model.exteriorColor) {
+    if (switchView) model.lookSwitch('outer');
+    model.exteriorColor(c.color);
+  }
+  if (c.wheel && model.wheel) {
+    if (switchView) model.lookSwitch('outer');
+    model.wheel(c.wheel);
+  }
+  if (c.interior && model.interiorColor) model.interiorColor(c.interior);
+  if ('towhook' in c && model.towHook) model.towHook(!!c.towhook);
+  if ('ambient' in c && model.ambientLight) model.ambientLight(!!c.ambient);
+  if (c.lang && model.lang) model.lang(c.lang);
+  if (c.view && model.lookSwitch) model.lookSwitch(c.view);
+}
+
+/* Monta a barra de opcoes embutida e mantem o estado dos botoes em
+   sincronia com CONF, seja a mudanca vinda de clique ou de postMessage. */
+const syncUI = [];
+function buildUI() {
+  document.body.classList.add('has-ui');
+
+  const press = (el, on) => el.setAttribute('aria-pressed', on ? 'true' : 'false');
+
+  // Cores exteriores
+  const colors = document.getElementById('ui-colors');
+  for (const [code, [name, hex]] of Object.entries(LABELS.color)) {
+    const b = document.createElement('button');
+    b.className = 'dot';
+    b.style.background = hex;
+    b.title = name;
+    b.setAttribute('aria-label', name);
+    b.onclick = () => set({ color: code });
+    colors.append(b);
+    syncUI.push(() => press(b, CONF.color === code));
+  }
+
+  // Exterior / Interior e rodas
+  const seg = (host, key, map) => {
+    for (const [code, label] of Object.entries(map)) {
+      const b = document.createElement('button');
+      b.textContent = label;
+      b.onclick = () => set({ [key]: code });
+      host.append(b);
+      syncUI.push(() => press(b, CONF[key] === code));
+    }
+  };
+  seg(document.getElementById('ui-view'), 'view', LABELS.view);
+  seg(document.getElementById('ui-wheel'), 'wheel', LABELS.wheel);
+
+  refreshUI();
+}
+function refreshUI() { syncUI.forEach((fn) => fn()); }
+
+/* Ponto unico de mudanca: atualiza CONF, aplica no modelo e re-sincroniza a UI. */
+function set(patch) {
+  Object.assign(CONF, patch);
+  // Escolher roda ou cor exterior implica olhar de fora; interior, de dentro.
+  if (('color' in patch || 'wheel' in patch) && !('view' in patch)) CONF.view = 'outer';
+  if ('interior' in patch && !('view' in patch)) CONF.view = 'inner';
+  apply({ ...patch, view: CONF.view });
+  refreshUI();
+  emit('changed', { config: patch });
+}
+
+async function start() {
+  let init;
+  try {
+    ({ init } = await import(/* @vite-ignore */ BASE + '/model.js'));
+  } catch (e) {
+    bootmsg.className = 'err';
+    bootmsg.textContent = 'Nao foi possivel carregar o modulo 3D da Denza. Verifique a conexao ou se a URL de origem mudou.';
+    emit('error', { message: String(e) });
+    return;
+  }
+
+  model = await init({
+    path: {
+      draco:   BASE + '/draco',
+      model:   BASE + '/model',
+      assets:  BASE + '/assets',
+      locales: BASE + '/locales',
+      product: BASE + '/product',
+    },
+    lang: CONF.lang,
+    onProgress: (p) => {
+      bootbar.style.width = Math.round((p || 0) * 100) + '%';
+      emit('progress', { progress: p });
+    },
+    onZoom: (z) => emit('zoom', { zoom: z }),
+    onBack: () => emit('back', {}),
+  });
+
+  if (!model) {
+    bootmsg.className = 'err';
+    bootmsg.textContent = 'O modulo 3D carregou mas nao inicializou (WebGL indisponivel?).';
+    emit('error', { message: 'init returned null' });
+    return;
+  }
+
+  apply(CONF);
+  if (flag('ui', false)) buildUI();
+  boot.classList.add('done');
+  document.body.classList.add('ready');
+  setTimeout(() => boot.remove(), 500);
+  emit('ready', { config: CONF });
+  window.denza3D = model; // acesso manual via console, se precisar
+
+  // Poupa GPU quando a aba/iframe nao esta visivel
+  document.addEventListener('visibilitychange', () => {
+    if (!model || !model.render) return;
+    model.render(document.hidden ? 'pause' : 'play');
+  });
+
+  /* API por postMessage - o criador de paginas pode controlar o embed:
+       iframe.contentWindow.postMessage(
+         { source: 'denza-3d-control', color: 'blue', view: 'inner' }, '*');
+     Tambem aceita { action: 'pause' | 'play' }. */
+  addEventListener('message', (ev) => {
+    const d = ev.data;
+    if (!d || typeof d !== 'object' || d.source !== 'denza-3d-control') return;
+    if (d.action === 'pause' || d.action === 'play') {
+      if (model.render) model.render(d.action);
+      return;
+    }
+    const next = {};
+    for (const k of ['version', 'color', 'interior', 'wheel', 'view', 'lang']) {
+      if (d[k] && VALID[k].includes(d[k])) next[k] = d[k];
+    }
+    if ('towhook' in d) next.towhook = !!d.towhook;
+    if ('ambient' in d) next.ambient = !!d.ambient;
+    set(next);
+  });
+}
+
+start();
+</script>
+</body>
+</html>
