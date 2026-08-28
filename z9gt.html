@@ -55,7 +55,7 @@
 
   /* ---- barra de configuracao embutida (mesma ideia do embed do B5) -----
      O viewer roda em modo "config" e a UI nativa fica suprimida, entao esta
-     barra devolve o controle (cores/interior/vista/rodas) para dentro do
+     barra devolve o controle (cores/interior/vista) para dentro do
      iframe. Ligada por padrao; use ?bar=0 para esconder.                  */
   #zn-ui {
     position: fixed; z-index: 99997; left: 50%; bottom: 18px;
@@ -111,7 +111,7 @@
 
 <button id="zn-back" type="button">&#8592; Voltar </button>
 
-<!-- Barra de configuracao (cores exterior/interior, vista e rodas).
+<!-- Barra de configuracao (cores exterior/interior e vista).
      Ligada por padrao; ?bar=0 esconde. -->
 <div id="zn-ui" role="toolbar" aria-label="Configuracao do Denza Z9GT">
   <div class="grp" id="zn-ui-ext"></div>
@@ -119,8 +119,6 @@
   <div class="grp" id="zn-ui-int"></div>
   <div class="sep"></div>
   <div class="seg" id="zn-ui-view"></div>
-  <div class="sep"></div>
-  <div class="seg" id="zn-ui-wheel"></div>
 </div>
 
 <div id="zn-loader">
@@ -184,10 +182,9 @@ const VALUES = {
 };
 
 /* ------------------------------------------------------------------
-   Cores das bolinhas: usamos os proprios codigos do modelo (VALUES).
-   green/cyan/blue/gold/white/red/black ja sao nomes de cor validos em
-   CSS, entao vao direto para o background. So copper e os dois pretos
-   precisam de um hex. */
+   Cores das bolinhas: cada codigo do modelo recebe um hex aqui.
+   Um codigo que nao estiver neste mapa cai no proprio nome como cor CSS.
+   Edite so este objeto para mudar a aparencia das bolinhas.            */
 const HEX = {
   green:     '#1b454b',
   cyan:      '#818e87',
@@ -199,12 +196,11 @@ const HEX = {
   black: '#1b1b1e',
   white: '#b8c1c9',
 };
-  const swatch = (code) => HEX[code] || code;
+const swatch = (code) => HEX[code] || code;
 
-// Textos dos segmentos que nao sao cor (vista e rodas)
+// Textos dos segmentos que nao sao cor (apenas vista; rodas removidas da barra)
 const SEG = {
-  view:  { outer: 'Exterior', inner: 'Interior' },
-    wheel: { 'wheel-0': 'Roda 1', 'wheel-1': 'Roda 2', 'wheel-2': 'Roda 3' },
+  view: { outer: 'Exterior', inner: 'Interior' },
 };
 
 let instance = null;
@@ -268,7 +264,7 @@ try {
     if (value && (!VALUES[action] || VALUES[action].includes(value))) apply(action, value);
   }
 
-  // ---- barra de opcoes (cores/interior/vista/rodas) ---------------
+  // ---- barra de opcoes (cores/interior/vista) ---------------------
   const pressBtn = (el, on) => el.setAttribute('aria-pressed', on ? 'true' : 'false');
   const refreshBar = () => syncBar.forEach((fn) => fn());
 
@@ -302,8 +298,10 @@ try {
   const buildBar = () => {
     document.body.classList.add('has-bar');
 
-    // bolinhas de cor: geradas direto dos codigos do modelo (VALUES)
+    // bolinhas de cor: geradas direto dos codigos do modelo (VALUES).
+    // guarda: se o grupo nao existir/estiver vazio, nao desenha (nao quebra).
     const dots = (host, key) => {
+      if (!host || !VALUES[key]) return;
       for (const code of VALUES[key]) {
         const b = document.createElement('button');
         b.className = 'dot';
@@ -318,8 +316,9 @@ try {
     dots(document.getElementById('zn-ui-ext'), 'exteriorColor');
     dots(document.getElementById('zn-ui-int'), 'interiorColor');
 
-    // segmentos de texto (vista e rodas)
+    // segmentos de texto (vista). Mesma guarda.
     const seg = (host, key) => {
+      if (!host || !SEG[key]) return;
       for (const [code, label] of Object.entries(SEG[key])) {
         const b = document.createElement('button');
         b.textContent = label;
@@ -330,7 +329,6 @@ try {
       }
     };
     seg(document.getElementById('zn-ui-view'), 'view');
-    seg(document.getElementById('zn-ui-wheel'), 'wheel');
 
     refreshBar();
   };
