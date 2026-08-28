@@ -152,7 +152,6 @@ if (!flag('zoom', true)) document.body.classList.add('no-zoom');
 // Nomes oficiais das opcoes (locale pt do proprio viewer)
 const LABELS = {
   color: {
-    gold:  ['Tarim Poplar Gold', '#c7a45c'],
     green: ['Olive Green',       '#7e8c72'],
     blue:  ['Sky Blue',          '#6e97ae'],
     gray:  ['Stone Grey',        '#8c9094'],
@@ -225,8 +224,6 @@ function buildUI() {
     }
   };
   seg(document.getElementById('ui-view'), 'view', LABELS.view);
-  seg(document.getElementById('ui-wheel'), 'wheel', LABELS.wheel);
-
   refreshUI();
 }
 function refreshUI() { syncUI.forEach((fn) => fn()); }
