@@ -188,8 +188,18 @@ const VALUES = {
    green/cyan/blue/gold/white/red/black ja sao nomes de cor validos em
    CSS, entao vao direto para o background. So copper e os dois pretos
    precisam de um hex. */
-const HEX = { copper: '#1b454b', '#818e87': '#8f9192', '#1f2754': '#393939' };
-const swatch = (code) => HEX[code] || code;
+const HEX = {
+  green:     '#1b454b',
+  cyan:      '#818e87',
+  gold:      '#8f9192',
+  blue:      '#1f2754',
+  'o-black': '#393939',
+  // interior:
+  red:   '#523b49',
+  black: '#1b1b1e',
+  white: '#293948',
+};
+  const swatch = (code) => HEX[code] || code;
 
 // Textos dos segmentos que nao sao cor (vista e rodas)
 const SEG = {
