@@ -175,7 +175,7 @@ const fail = (err) => {
 
 // Valores aceitos pela API do modelo (extraidos do build oficial)
 const VALUES = {
-  exteriorColor: ['green', 'cyan', 'blue', 'gold', 's-black', 'o-black'],
+  exteriorColor: ['green', 'cyan', 'gold', 'blue', 'o-black'],
   interiorColor: ['red', 'black', 'white'],
   wheel:         ['wheel-0', 'wheel-1', 'wheel-2'],
   sideMirror:    ['ev', 'dm'],
@@ -188,7 +188,7 @@ const VALUES = {
    green/cyan/blue/gold/white/red/black ja sao nomes de cor validos em
    CSS, entao vao direto para o background. So copper e os dois pretos
    precisam de um hex. */
-const HEX = { copper: '#b87333', 's-black': '#1a1a1a', 'o-black': '#000000' };
+const HEX = { copper: '#1b454b', '#818e87': '#8f9192', '#1f2754': '#393939' };
 const swatch = (code) => HEX[code] || code;
 
 // Textos dos segmentos que nao sao cor (vista e rodas)
