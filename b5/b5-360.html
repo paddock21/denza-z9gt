@@ -30,11 +30,13 @@
 
   /* Controles internos do viewer que podem ser escondidos no embed.
      .page-config.options-group-1 = botao "Back to Gallery"
-     .page-config.zoom            = botao de expandir/recolher */
+     .page-config.zoom            = botao de expandir/recolher
+     O botao "Back to Gallery" fica escondido de forma fixa via
+     <body class="no-back"> (nao depende de parametro na URL). */
   body.no-back .page-config.options-group-1 { display: none !important; }
   body.no-zoom .page-config.zoom { display: none !important; }
 
-  /* ---- UI opcional embutida (?ui=1) ------------------------------
+  /* ---- UI embutida (ligada por padrao; ?ui=0 esconde) -------------
      O viewer roda em modo "config": o painel de opcoes dele fica
      suprimido porque, no site oficial, quem controla e a pagina-mae.
      Esta barra devolve esse controle para dentro do iframe.        */
@@ -81,7 +83,7 @@
   }
 </style>
 </head>
-<body>
+<body class="no-back">
 
 <div class="zn--wrapper"></div>
 
@@ -90,13 +92,11 @@
   <div id="bootmsg">Carregando 3D...</div>
 </div>
 
-<!-- Barra opcional, ativada com ?ui=1 -->
+<!-- Barra de opcoes (ligada por padrao; ?ui=0 esconde) -->
 <div id="ui" role="toolbar" aria-label="Configuracao do DENZA B5">
   <div class="grp" id="ui-colors"></div>
   <div class="sep"></div>
   <div class="seg" id="ui-view"></div>
-  <div class="sep"></div>
-  <div class="seg" id="ui-wheel"></div>
 </div>
 
 <script type="module">
@@ -137,7 +137,7 @@ const pick = (k, d) => (VALID[k].includes(opt(k, '')) ? opt(k, '') : d);
 
 const CONF = {
   version:  pick('version', 'gs'),
-  color:    pick('color', 'gold'),
+  color:    pick('color', 'green'),
   interior: pick('interior', 'in-green'),
   wheel:    pick('wheel', 'wheel-0'),
   view:     pick('view', 'outer'),
@@ -213,7 +213,7 @@ function buildUI() {
     syncUI.push(() => press(b, CONF.color === code));
   }
 
-  // Exterior / Interior e rodas
+  // Exterior / Interior
   const seg = (host, key, map) => {
     for (const [code, label] of Object.entries(map)) {
       const b = document.createElement('button');
@@ -275,7 +275,7 @@ async function start() {
   }
 
   apply(CONF);
-  if (flag('ui', false)) buildUI();
+  if (flag('ui', true)) buildUI();
   boot.classList.add('done');
   document.body.classList.add('ready');
   setTimeout(() => boot.remove(), 500);
