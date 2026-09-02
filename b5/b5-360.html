@@ -31,8 +31,8 @@
   /* Controles internos do viewer que podem ser escondidos no embed.
      .page-config.options-group-1 = botao "Back to Gallery"
      .page-config.zoom            = botao de expandir/recolher
-     O botao "Back to Gallery" fica escondido de forma fixa via
-     <body class="no-back"> (nao depende de parametro na URL). */
+     Ambos ficam escondidos de forma fixa via <body class="no-back no-zoom">
+     (nao dependem de parametro na URL). */
   body.no-back .page-config.options-group-1 { display: none !important; }
   body.no-zoom .page-config.zoom { display: none !important; }
 
@@ -83,7 +83,7 @@
   }
 </style>
 </head>
-<body class="no-back">
+<body class="no-back no-zoom">
 
 <div class="zn--wrapper"></div>
 
