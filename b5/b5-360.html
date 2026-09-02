@@ -77,8 +77,35 @@
   }
   #ui .seg button[aria-pressed="true"] { background: #fff; color: #18181b; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
 
+  /* Botao de perspectiva interna — mesma cara do nativo "Mudar Perspectiva":
+     pilula branca, texto navy, borda sutil, cantos 6px, fonte URW.
+     Valores extraidos do computed style do botao oficial. */
+  #ui .perspbtn {
+    display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto;
+    padding: 8px 11px; border-radius: 6px;
+    background: #fff; border: 1px solid rgba(2,19,73,.10);
+    color: #021349; cursor: pointer;
+    font-family: "URW Form Expand", -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-weight: 500; font-size: 12px; line-height: 1; white-space: nowrap;
+    transition: box-shadow .15s ease;
+  }
+  #ui .perspbtn:hover { box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+  #ui .perspbtn img, #ui .perspbtn svg { width: 15px; height: 15px; display: block; }
+
+  /* ---- Mobile: barra quebra em linhas em vez de cortar ---- */
   @media (max-width: 560px) {
-    #ui { gap: 10px; padding: 8px 10px; bottom: 12px; }
+    #ui {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px 10px;
+      padding: 10px 12px;
+      bottom: 12px;
+      max-width: calc(100% - 16px);
+      border-radius: 18px;
+      overflow-x: visible;
+    }
+    #ui .sep { display: none; }
+    #ui .dot { width: 20px; height: 20px; }
     #ui .seg button { padding: 6px 9px; }
   }
 </style>
@@ -124,16 +151,22 @@ const flag = (k, d = false) => {
   return v !== '0' && v !== 'false' && v !== 'no';
 };
 
-// Valores aceitos pelo modelo B5 (extraidos do bundle do viewer)
+// Valores aceitos pelo modelo B5 (extraidos do bundle do viewer).
+// As vistas internas inner-fr / inner-back foram confirmadas via console
+// (lookSwitch move a camera para frente / traseira do interior).
 const VALID = {
   version:  ['gs', 'gl'],                              // gs = alto, gl = baixo
   color:    ['gold', 'green', 'blue', 'black', 'gray'],
   interior: ['in-green', 'in-blue', 'in-beige'],
   wheel:    ['wheel-0', 'wheel-1'],                    // 20" / 18"
-  view:     ['outer', 'inner'],
+  view:     ['outer', 'inner', 'inner-fr', 'inner-back'],
   lang:     ['pt', 'es', 'en', 'de', 'fr', 'it', 'pl'],
 };
 const pick = (k, d) => (VALID[k].includes(opt(k, '')) ? opt(k, '') : d);
+
+// Ordem em que o botao de perspectiva cicla as vistas internas.
+// Edite/reordene aqui se quiser outro percurso (ex.: so frente/traseira).
+const INNER_VIEWS = ['inner', 'inner-fr', 'inner-back'];
 
 const CONF = {
   version:  pick('version', 'gs'),
@@ -213,17 +246,67 @@ function buildUI() {
     syncUI.push(() => press(b, CONF.color === code));
   }
 
-  // Exterior / Interior
+  // Exterior / Interior. "Interior" fica marcado em qualquer sub-vista interna.
   const seg = (host, key, map) => {
     for (const [code, label] of Object.entries(map)) {
       const b = document.createElement('button');
       b.textContent = label;
       b.onclick = () => set({ [key]: code });
       host.append(b);
-      syncUI.push(() => press(b, CONF[key] === code));
+      syncUI.push(() => {
+        const on = (key === 'view')
+          ? (code === 'outer' ? CONF.view === 'outer' : String(CONF.view).startsWith('inner'))
+          : CONF[key] === code;
+        press(b, on);
+      });
     }
   };
   seg(document.getElementById('ui-view'), 'view', LABELS.view);
+
+  // Botao de perspectiva interna: a cada clique avanca para a proxima vista
+  // interna (como o botao nativo do Z9GT). Se estiver no exterior, entra no
+  // interior no primeiro clique.
+  const ui = document.getElementById('ui');
+  const sep = document.createElement('div');
+  sep.className = 'sep';
+  ui.append(sep);
+
+  const persp = document.createElement('button');
+  persp.type = 'button';
+  persp.className = 'perspbtn';
+  persp.title = 'Trocar perspectiva do interior';
+  persp.setAttribute('aria-label', persp.title);
+
+  const plabel = document.createElement('span');
+  plabel.textContent = 'Mudar Perspectiva';
+
+  // Icone oficial da Denza (troca conforme a vista, como o botao nativo).
+  // Se o SVG nao existir neste build do B5, cai para um icone inline.
+  const iconUrl = (v) => BASE + '/assets/' + (INNER_VIEWS.includes(v) ? v : 'inner') + '.svg';
+  const pimg = document.createElement('img');
+  pimg.alt = '';
+  pimg.src = iconUrl(CONF.view);
+  pimg.onerror = () => {
+    const span = document.createElement('span');
+    span.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polyline points="23 4 23 10 17 10"></polyline>' +
+      '<polyline points="1 20 1 14 7 14"></polyline>' +
+      '<path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>' +
+      '</svg>';
+    pimg.replaceWith(span);
+  };
+
+  persp.append(plabel, pimg);
+  persp.onclick = () => {
+    const i = INNER_VIEWS.indexOf(CONF.view);       // -1 se estiver no exterior
+    set({ view: INNER_VIEWS[(i + 1) % INNER_VIEWS.length] });
+  };
+  ui.append(persp);
+
+  // mantem o icone coerente com a vista atual (como o nativo faz)
+  syncUI.push(() => { if (pimg.isConnected) pimg.src = iconUrl(CONF.view); });
+
   refreshUI();
 }
 function refreshUI() { syncUI.forEach((fn) => fn()); }
