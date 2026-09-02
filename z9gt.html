@@ -94,9 +94,21 @@
   }
   #zn-ui .seg button[aria-pressed="true"] { background: #fff; color: #021349; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
 
+  /* ---- Mobile: barra quebra em linhas em vez de cortar ---- */
   @media (max-width: 560px) {
-    #zn-ui { gap: 10px; padding: 8px 10px; bottom: 12px; }
-    #zn-ui .seg button { padding: 6px 9px; }
+    #zn-ui {
+      flex-wrap: wrap;               /* quebra em linhas em vez de esconder itens */
+      justify-content: center;
+      gap: 8px 10px;
+      padding: 10px 12px;
+      bottom: 10px;
+      max-width: calc(100% - 16px);
+      border-radius: 18px;           /* vira retangulo arredondado ao quebrar */
+      overflow-x: visible;
+    }
+    #zn-ui .sep { display: none; }    /* separadores atrapalham quando quebra */
+    #zn-ui .dot { width: 20px; height: 20px; }
+    #zn-ui .seg button { padding: 6px 10px; }
   }
 
   @media (prefers-color-scheme: dark) {
